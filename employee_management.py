@@ -1,4 +1,7 @@
+#! usr/bin/env python3
+
 import sqlite3
+#from tabulate import tabulate
 
 conn = sqlite3.connect('employee.db')
 cursor = conn.cursor()
@@ -50,7 +53,7 @@ def add_employee():
     birthday = (input("Enter employee date of birth  (YYYY-MM-DD): "))
     hire_date = (input("Enter date of hire  (YYYY-MM-DD): "))
     position = (input("Enter employee position: "))
-    hourly_wage = int(input("Enter employee hourly rate: "))
+    hourly_wage = float(input("Enter employee hourly rate: "))
     address = (input("Enter employee address: "))
 
     cursor.execute(''' 
@@ -191,28 +194,54 @@ def view_employees():
 
     if rows:
         print("\nEmployees in the database:")
+        print(f"{'ID':<5} {'Name':<20} {'Birthday':<12} {'Hire Date':<12} {'Position':<15} {'Wage':<8} {'Address':<30}")
+        print("-" * 100)
+
         for row in rows:
-            print(f"ID: {row[0]}, Name: {row[1]}, Birthday: {row[2]}, Hire Date: {row[3]}, "
-                  f"Position: {row[4]}, Hourly Wage: ${row[5]:.2f}, Address: {row[6]}")
-            print("\n")
+            print(f"{row[0]:<5} {row[1]:<20} {row[2]:<12} {row[3]:<12} {row[4]:<15} ${row[5]:<7.2f} {row[6]:<30}")
         print()
     else:
-        print("\nNo employees fount!\n")
+        print("\nNo employees found!\n")
 
 def view_past_employees():
     """View all past employees."""
     cursor.execute('SELECT * FROM past_employees')
     rows = cursor.fetchall()
     if rows:
-        print("\nPast employees in the database:")
+        print("\nEmployees in the database:")
+        print(f"{'ID':<5} {'Name':<20} {'Birthday':<12} {'Hire Date':<12} {'Position':<15} {'Wage':<8} {'Address':<30}")
+        print("-" * 100)
+
         for row in rows:
-            print(f"ID: {row[0]}, Name: {row[1]}, Birthday: {row[2]}, Hire Date: {row[3]}, "
-                  f"Position: {row[4]}, Hourly Wage: ${row[5]:.2f}, Address: {row[6]}")
+            print(f"{row[0]:<5} {row[1]:<20} {row[2]:<12} {row[3]:<12} {row[4]:<15} ${row[5]:<7.2f} {row[6]:<30}")
         print()
     else:
-        print("\nNo past employees found!\n")
+        print("\nNo employees found!\n")
 
+def permanently_delete_employee():
+    """Permanently delete an employee and associated records from the database, with confirmation."""
+    name = input("Enter the name of the employee to be deleted: ")
 
+    cursor.execute('SELECT * FROM employees WHERE name = ?', (name,))
+    employee = cursor.fetchone()
+
+    if employee:
+        print(f"\nEmployee found: {name}")
+        print("Are you sure wnat to permanently delete this record? This cannot be undone.")
+        confirmation = input("Type 'YES' to confirm or anything else to cancel: ")
+
+        if confirmation == "YES":
+            employee_id = employee[0]
+
+            cursor.execute('DELETE FROM sick_days WHERE employee_id = ?', (employee_id,))
+            cursor.execute('DELETE FROM employees WHERE id = ?', (employee_id,))
+
+            conn.commit()
+            print(f"Employee {name} and all associated records have been permanently deleted.")
+        else: 
+            print("Deletion canceled.")
+    else:
+        print(f"Employee {name} not found.")
 
 def main_menu():
     """Main menu for application."""
@@ -226,7 +255,8 @@ def main_menu():
         print("6. Log Sick Day")
         print("7. View Sick Days")
         print("8. Total Sick Days Per Year")
-        print("9. Exit")
+        print("9. Permanently delete employee record")
+        print("10. Exit")
         choice = int(input("Enter your choice: "))
         if choice == 1:
             add_employee()
@@ -245,6 +275,8 @@ def main_menu():
         elif choice == 8:
             total_sick_days_per_year()
         elif choice == 9:
+            permanently_delete_employee()    
+        elif choice == 10:
             print("Exiting the application. Goodbye!")
             break
         else: 
