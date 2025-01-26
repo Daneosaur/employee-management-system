@@ -1,5 +1,6 @@
 #Ignore virtual environment directory
 venv/
+myvenv/
 
 #Ignore the SQLite database
 *.db 
