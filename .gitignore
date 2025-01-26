@@ -1,0 +1,20 @@
+#Ignore virtual environment directory
+venv/
+
+#Ignore the SQLite database
+*.db 
+
+#Ignore Python cache files
+__pychach__/
+
+#Ignore other potentially unnecessary files
+*.pyc 
+*.pyo 
+
+#Ignore IDE-specific files
+.vscode/
+.idea/
+
+#Ignore OS-specific files (Mac, Linux, Windows)
+.DS_Store       # MacOS
+Thumbs.db       # Windows
