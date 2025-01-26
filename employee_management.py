@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS sick_days (
     ''')
 conn.commit()
 
-
 cursor.execute(''' 
 CREATE TABLE IF NOT EXISTS past_employees (
     id INTEGER PRIMARY KEY,
