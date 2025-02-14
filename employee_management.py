@@ -3,6 +3,8 @@
 import sqlite3
 import os
 from datetime import datetime
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 
 # Set the absolut path for the database
@@ -276,16 +278,17 @@ def add_salary_change():
     """Record a salary change for an employee."""
     name = input("Enter the employee's name: ")
     new_wage = float(input("Enter the new hourly wage: "))
+    change_date = input("Enter the date of change (YYYY-MM-DD): ")
     
     cursor.execute('SELECT id FROM employees WHERE name = ?', (name,))
     result = cursor.fetchone()
     
     if result:
         employee_id = result[0]
-        cursor.execute('INSERT INTO salary_changes (employee_id, new_wage) VALUES (?, ?)', (employee_id, new_wage))
+        cursor.execute('INSERT INTO salary_changes (employee_id, change_date, new_wage) VALUES (?, ?, ?)', (employee_id, change_date, new_wage))
         cursor.execute('UPDATE employees SET hourly_wage = ? WHERE id = ?', (new_wage, employee_id))
         conn.commit()
-        print(f"Salary updated to ${new_wage:.2f} for {name}.")
+        print(f"Salary updated to ${new_wage:.2f} for {name} on {change_date}.")
     else:
         print(f"No employee found with the name {name}.")
 
@@ -293,17 +296,19 @@ def add_bonus():
     """Record a bonus for an employee."""
     name = input("Enter the employee's name: ")
     bonus_amount = float(input("Enter the bonus amount: "))
+    bonus_date = input("Enter the bonus date (YYYY-MM-DD): ")
     
     cursor.execute('SELECT id FROM employees WHERE name = ?', (name,))
     result = cursor.fetchone()
     
     if result:
         employee_id = result[0]
-        cursor.execute('INSERT INTO bonuses (employee_id, amount) VALUES (?, ?)', (employee_id, bonus_amount))
+        cursor.execute('INSERT INTO bonuses (employee_id, bonus_date, amount) VALUES (?, ?, ?)', (employee_id, bonus_date, bonus_amount))
         conn.commit()
-        print(f"Bonus of ${bonus_amount:.2f} added for {name}.")
+        print(f"Bonus of ${bonus_amount:.2f} added for {name} on {bonus_date}.")
     else:
         print(f"No employee found with the name {name}.")
+
 def fetch_employee_data(employee_id):
     cursor.execute("SELECT name, hourly_wage FROM employees WHERE id = ?", (employee_id,))
     employee = cursor.fetchone()
@@ -323,8 +328,21 @@ def fetch_employee_data(employee_id):
         }
     return None
 
+def save_report_as_pdf(name, report_text):
+    filename = f"{name.replace(' ', '_')}_comp_report.pdf"
+    c = canvas.Canvas(filename, pagesize=letter)
+    c.setFont("Helvetica", 10)
+    
+    y = 750  # Start position for text
+    for line in report_text.split("\n"):
+        c.drawString(50, y, line)
+        y -= 15  # Move down
+    
+    c.save()
+    print(f"Report saved as {filename}. You can now print it.")
+
 def generate_comp_report():
-    """Generate and display an employee compensation report."""
+    """Generate and save an employee compensation report to a PDF file."""
     name = input("Enter the employee's name: ")
     cursor.execute("SELECT id FROM employees WHERE name = ?", (name,))
     result = cursor.fetchone()
@@ -334,42 +352,36 @@ def generate_comp_report():
         return
     
     employee_id = result[0]
-    employee_data = fetch_employee_data(employee_id)
+    cursor.execute("SELECT hourly_wage FROM employees WHERE id = ?", (employee_id,))
+    employee_data = cursor.fetchone()
+    
+    cursor.execute("SELECT change_date, new_wage FROM salary_changes WHERE employee_id = ? ORDER BY change_date ASC", (employee_id,))
+    salary_history = cursor.fetchall()
+    
+    cursor.execute("SELECT bonus_date, amount FROM bonuses WHERE employee_id = ? ORDER BY bonus_date ASC", (employee_id,))
+    bonuses = cursor.fetchall()
     
     report_date = datetime.today().strftime('%b %d, %Y')
-    total_annual_pay = employee_data['hourly_rate'] * 2080
-    total_bonus = sum(bonus[1] for bonus in employee_data['bonuses'])
+    total_annual_pay = employee_data[0] * 2080
+    total_bonus = sum(bonus[1] for bonus in bonuses) if bonuses else 0
     total_compensation = total_annual_pay + total_bonus
     
-    print(f"""
-Employee Compensation Review
-
-{report_date}
-
-{employee_data['name']}
-
-Compensation History:
-Date        New Hourly Wage
------------------------------------
-""")
-    for change in employee_data['salary_history']:
-        print(f"{change[0]}    ${change[1]:.2f}")
+    report = f"Employee Compensation Review\n\n{report_date}\n\n{name}\n\n"
+    report += "Compensation History:\nDate        New Hourly Wage\n-----------------------------------\n"
     
-    print(f"""
-
-Yearly Gross Pay: 
-${employee_data['hourly_rate']:.2f}/hr x 2080 hours = ${total_annual_pay:,.2f}
-
-Bonuses:
-Date        Amount
------------------------------------
-""")
-    for bonus in employee_data['bonuses']:
-        print(f"{bonus[0]}    ${bonus[1]:,.2f}")
+    for change in salary_history:
+        report += f"{change[0]}    ${change[1]:.2f}\n"
     
-    print(f"""
-Total Compensation: ${total_compensation:,.2f}
-""")
+    report += f"\n\nYearly Gross Pay: \n${employee_data[0]:.2f}/hr x 2080 hours = ${total_annual_pay:,.2f}\n\n"
+    
+    report += "Bonuses:\nDate        Amount\n-----------------------------------\n"
+    for bonus in bonuses:
+        report += f"{bonus[0]}    ${bonus[1]:,.2f}\n"
+
+    report += f"\n\nTotal Compensation: ${total_compensation:,.2f}\n"
+
+    # Save the report as a PDF
+    save_report_as_pdf(name, report)
 
 def main_menu():
     """Main menu for application."""
@@ -419,6 +431,9 @@ def main_menu():
             break
         else:
             print("Invalid choice. Please try again.\n")
+
+
+
 
 main_menu()
 
