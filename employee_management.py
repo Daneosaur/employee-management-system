@@ -1,10 +1,18 @@
-#! usr/bin/env python3
+#!/usr/bin/env python3
 
 import sqlite3
-#from tabulate import tabulate
+import os
+from datetime import datetime
 
-conn = sqlite3.connect('employee.db')
+
+# Set the absolut path for the database
+db_path = os.path.join(os.path.dirname(__file__), 'employee.db')
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
+
+print(f"Using database at: {db_path}")
+# conn = sqlite3.connect('employee.db')
+# cursor = conn.cursor()
 
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS employees (
@@ -19,7 +27,6 @@ CREATE TABLE IF NOT EXISTS employees (
 ''')
 conn.commit()
 
-print("Employee table created!")
 
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS sick_days (
@@ -46,6 +53,28 @@ CREATE TABLE IF NOT EXISTS past_employees (
     ''')
 conn.commit()
 
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS salary_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    change_date TEXT NOT NULL DEFAULT (DATE('now')),
+    new_wage REAL NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees (id)
+)
+''')
+conn.commit()
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS bonuses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    bonus_date TEXT NOT NULL DEFAULT (DATE('now')),
+    amount REAL NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees (id)
+)
+''')
+conn.commit()
 
 def add_employee():
     """Add a new employee to the database."""
@@ -243,6 +272,105 @@ def permanently_delete_employee():
     else:
         print(f"Employee {name} not found.")
 
+def add_salary_change():
+    """Record a salary change for an employee."""
+    name = input("Enter the employee's name: ")
+    new_wage = float(input("Enter the new hourly wage: "))
+    
+    cursor.execute('SELECT id FROM employees WHERE name = ?', (name,))
+    result = cursor.fetchone()
+    
+    if result:
+        employee_id = result[0]
+        cursor.execute('INSERT INTO salary_changes (employee_id, new_wage) VALUES (?, ?)', (employee_id, new_wage))
+        cursor.execute('UPDATE employees SET hourly_wage = ? WHERE id = ?', (new_wage, employee_id))
+        conn.commit()
+        print(f"Salary updated to ${new_wage:.2f} for {name}.")
+    else:
+        print(f"No employee found with the name {name}.")
+
+def add_bonus():
+    """Record a bonus for an employee."""
+    name = input("Enter the employee's name: ")
+    bonus_amount = float(input("Enter the bonus amount: "))
+    
+    cursor.execute('SELECT id FROM employees WHERE name = ?', (name,))
+    result = cursor.fetchone()
+    
+    if result:
+        employee_id = result[0]
+        cursor.execute('INSERT INTO bonuses (employee_id, amount) VALUES (?, ?)', (employee_id, bonus_amount))
+        conn.commit()
+        print(f"Bonus of ${bonus_amount:.2f} added for {name}.")
+    else:
+        print(f"No employee found with the name {name}.")
+def fetch_employee_data(employee_id):
+    cursor.execute("SELECT name, hourly_wage FROM employees WHERE id = ?", (employee_id,))
+    employee = cursor.fetchone()
+    
+    cursor.execute("SELECT change_date, new_wage FROM salary_changes WHERE employee_id = ? ORDER BY change_date ASC", (employee_id,))
+    salary_history = cursor.fetchall()
+    
+    cursor.execute("SELECT bonus_date, amount FROM bonuses WHERE employee_id = ? ORDER BY bonus_date ASC", (employee_id,))
+    bonuses = cursor.fetchall()
+    
+    if employee:
+        return {
+            'name': employee[0],
+            'hourly_rate': employee[1],
+            'salary_history': salary_history,
+            'bonuses': bonuses
+        }
+    return None
+
+def generate_comp_report():
+    """Generate and display an employee compensation report."""
+    name = input("Enter the employee's name: ")
+    cursor.execute("SELECT id FROM employees WHERE name = ?", (name,))
+    result = cursor.fetchone()
+    
+    if not result:
+        print(f"No employee found with the name {name}.")
+        return
+    
+    employee_id = result[0]
+    employee_data = fetch_employee_data(employee_id)
+    
+    report_date = datetime.today().strftime('%b %d, %Y')
+    total_annual_pay = employee_data['hourly_rate'] * 2080
+    total_bonus = sum(bonus[1] for bonus in employee_data['bonuses'])
+    total_compensation = total_annual_pay + total_bonus
+    
+    print(f"""
+Employee Compensation Review
+
+{report_date}
+
+{employee_data['name']}
+
+Compensation History:
+Date        New Hourly Wage
+-----------------------------------
+""")
+    for change in employee_data['salary_history']:
+        print(f"{change[0]}    ${change[1]:.2f}")
+    
+    print(f"""
+
+Yearly Gross Pay: 
+${employee_data['hourly_rate']:.2f}/hr x 2080 hours = ${total_annual_pay:,.2f}
+
+Bonuses:
+Date        Amount
+-----------------------------------
+""")
+    for bonus in employee_data['bonuses']:
+        print(f"{bonus[0]}    ${bonus[1]:,.2f}")
+    
+    print(f"""
+Total Compensation: ${total_compensation:,.2f}
+""")
+
 def main_menu():
     """Main menu for application."""
     while True:
@@ -256,7 +384,11 @@ def main_menu():
         print("7. View Sick Days")
         print("8. Total Sick Days Per Year")
         print("9. Permanently delete employee record")
-        print("10. Exit")
+        print("10. Add Salary Change")
+        print("11. Add Bonus")
+        print("12. Generate Compensation Report")
+        print("13. Exit")
+        
         choice = int(input("Enter your choice: "))
         if choice == 1:
             add_employee()
@@ -275,13 +407,20 @@ def main_menu():
         elif choice == 8:
             total_sick_days_per_year()
         elif choice == 9:
-            permanently_delete_employee()    
+            permanently_delete_employee()
         elif choice == 10:
+            add_salary_change()
+        elif choice == 11:
+            add_bonus()
+        elif choice == 12:
+            generate_comp_report()
+        elif choice == 13:
             print("Exiting the application. Goodbye!")
             break
-        else: 
+        else:
             print("Invalid choice. Please try again.\n")
 
 main_menu()
 
 conn.close()
+
